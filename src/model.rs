@@ -1,9 +1,11 @@
 use std::cmp::Ordering;
+use serde::{Deserialize, Serialize};
+use serde_json::Result as JSONResult;
 
 type ID = usize;
 type RANK = usize;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Node {
     pub name: String,
     pub rank: RANK,
@@ -31,6 +33,7 @@ impl PartialEq for Node {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Leaderboard {
     entries: Vec<Node>,     // Sorted by ID
     next_id: usize
@@ -115,5 +118,16 @@ impl Leaderboard {
             println!("{}: {}", entry.rank, entry.name);
         }
         println!("========================");
+    }
+
+    pub fn serialize_to_json(&mut self) -> JSONResult<String>{
+        let json_string = serde_json::to_string(self)?;
+        println!("{}", json_string);
+        Ok(json_string)
+    }
+
+    pub fn intialize_from_json(json_string: String) -> JSONResult<Self> {
+        let leaderboard = serde_json::from_str(&json_string)?;
+        Ok(leaderboard)
     }
 }

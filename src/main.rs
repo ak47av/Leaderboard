@@ -15,5 +15,10 @@ fn main() {
     leaderboard.remove(5);
     leaderboard.new_entry("Ori and the will of the wisps".to_owned(), 45);
     leaderboard.change_rank(1, 4).unwrap();
-    leaderboard.display();
+    // leaderboard.display();
+    let jstr = leaderboard.serialize_to_json().unwrap();
+    let mut newlb = Leaderboard::intialize_from_json(jstr).unwrap();
+
+    newlb.new_entry("Cyberpunk 2077".to_owned(), 10);
+    newlb.display();
 }
