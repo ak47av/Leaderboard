@@ -1,6 +1,7 @@
 use serde_json::Result as JSONResult;
 use std::error::Error;
 use serde::{Deserialize, Serialize};
+use std::ops::Drop;
 
 use crate::node::Node;
 use crate::storage;
@@ -94,7 +95,7 @@ impl Leaderboard {
         println!("========================");
     }
 
-    pub fn serialize_to_json(&mut self) -> JSONResult<String>{
+    pub fn serialize_to_json(&self) -> JSONResult<String>{
         let json_string = serde_json::to_string(self)?;
         Ok(json_string)
     }
@@ -111,10 +112,10 @@ impl Leaderboard {
         file_location
     }
 
-    pub fn save_leaderboard(&mut self) -> Result<String, Box<dyn Error>> {
+    pub fn save_leaderboard(&self) -> Result<String, Box<dyn Error>> {
         let data = self.serialize_to_json()?;
         let file_location = Leaderboard::get_leaderboard_file_location(&self.name);
-        storage::write_to_file(&data, file_location)?;
+        storage::write_to_file(&data, &file_location)?;
         Ok(format!("Successfully saved {}", self.name).to_owned())
     }
 
@@ -124,4 +125,10 @@ impl Leaderboard {
         Ok(Leaderboard::intialize_from_json(&data)?)
     }
 
+}
+
+impl Drop for Leaderboard {
+    fn drop(&mut self) {
+        self.save_leaderboard().unwrap();
+    }
 }
