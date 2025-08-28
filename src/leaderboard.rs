@@ -1,40 +1,9 @@
-use std::cmp::Ordering;
-use serde::{Deserialize, Serialize};
 use serde_json::Result as JSONResult;
 use std::error::Error;
+use serde::{Deserialize, Serialize};
 
+use crate::node::Node;
 use crate::storage;
-
-type ID = usize;
-type RANK = usize;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Node {
-    pub name: String,
-    pub rank: RANK,
-    pub id: ID
-}
-
-impl Ord for Node {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.rank.cmp(&other.rank)
-    }
-}
-
-impl Eq for Node {
-}
-
-impl PartialOrd for Node {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.rank.cmp(&other.rank))
-    }
-}
-
-impl PartialEq for Node {
-    fn eq(&self, other: &Self) -> bool {
-        self.rank == other.rank
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Leaderboard {
@@ -45,9 +14,9 @@ pub struct Leaderboard {
 
 impl Leaderboard {
 
-    pub fn new(n: String) -> Self {
+    pub fn new(n: &str) -> Self {
         Leaderboard {
-            name: n,
+            name: n.to_owned(),
             entries: Vec::new(),
             next_id: 1
         }
@@ -67,9 +36,9 @@ impl Leaderboard {
         Ok(rank)
     }
 
-    pub fn new_entry(&mut self, name: String, rank: usize) {
+    pub fn new_entry(&mut self, name: &str, rank: usize) {
         let rank = std::cmp::min(rank, self.entries.len()  + 1);
-        let new_node = Node {name: name.clone(), rank: rank, id: self.next_id};
+        let new_node = Node {name: name.to_owned(), rank: rank, id: self.next_id};
         self.next_id += 1;
 
         match self.insert_node_at_rank(new_node, rank) {
@@ -130,28 +99,29 @@ impl Leaderboard {
         Ok(json_string)
     }
 
-    pub fn intialize_from_json(json_string: String) -> JSONResult<Self> {
-        let leaderboard = serde_json::from_str(&json_string)?;
+    pub fn intialize_from_json(json_string: &str) -> JSONResult<Self> {
+        let leaderboard = serde_json::from_str(json_string)?;
         Ok(leaderboard)
     }
 
-    fn get_leaderboard_file_location(name: String) -> String {
-        let mut file_location = name;
+    fn get_leaderboard_file_location(name: &str) -> String {
+        let mut file_location = "Leaderboards/".to_owned();
+        file_location.push_str(name);
         file_location.push_str(".json");
         file_location
     }
 
     pub fn save_leaderboard(&mut self) -> Result<String, Box<dyn Error>> {
         let data = self.serialize_to_json()?;
-        let file_location = Leaderboard::get_leaderboard_file_location(self.name.clone());
-        storage::write_to_file(data, file_location)?;
+        let file_location = Leaderboard::get_leaderboard_file_location(&self.name);
+        storage::write_to_file(&data, file_location)?;
         Ok(format!("Successfully saved {}", self.name).to_owned())
     }
 
-    pub fn open_leaderboard(name: String) -> Result<Leaderboard, Box<dyn Error>>  {
+    pub fn open_leaderboard(name: &str) -> Result<Leaderboard, Box<dyn Error>>  {
         let file_location = Leaderboard::get_leaderboard_file_location(name);
-        let data = storage::read_from_file(file_location)?;
-        Ok(Leaderboard::intialize_from_json(data)?)
+        let data = storage::read_from_file(&file_location)?;
+        Ok(Leaderboard::intialize_from_json(&data)?)
     }
 
 }

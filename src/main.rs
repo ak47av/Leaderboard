@@ -1,12 +1,18 @@
-mod model;
+mod leaderboard;
 mod storage;
+mod node;
 
-use model::{Leaderboard};
+use leaderboard::{Leaderboard};
 
 fn main() {
-    let mut games = Leaderboard::open_leaderboard("Games".to_owned()).unwrap();
-    games.new_entry("Horizon Zero dawn".to_owned(), 6);
+    let mut games = Leaderboard::open_leaderboard("Games").unwrap();
 
-    games.save_leaderboard();
     games.display();
+    games.save_leaderboard().unwrap();
+
+
+    let mut movies = Leaderboard::new("Movies");
+
+    movies.display();
+    movies.save_leaderboard();
 }
