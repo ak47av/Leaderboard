@@ -1,6 +1,9 @@
 use std::cmp::Ordering;
 use serde::{Deserialize, Serialize};
 use serde_json::Result as JSONResult;
+use std::error::Error;
+
+use crate::storage;
 
 type ID = usize;
 type RANK = usize;
@@ -35,14 +38,16 @@ impl PartialEq for Node {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Leaderboard {
+    name: String,
     entries: Vec<Node>,     // Sorted by ID
     next_id: usize
 }
 
 impl Leaderboard {
 
-    pub fn new() -> Self {
+    pub fn new(n: String) -> Self {
         Leaderboard {
+            name: n,
             entries: Vec::new(),
             next_id: 1
         }
@@ -113,7 +118,7 @@ impl Leaderboard {
     }
 
     pub fn display(&self){
-        println!("=====LEADERBOARD=======");
+        println!("========={}===========", self.name);
         for entry in &self.entries {
             println!("{}: {}", entry.rank, entry.name);
         }
@@ -122,7 +127,6 @@ impl Leaderboard {
 
     pub fn serialize_to_json(&mut self) -> JSONResult<String>{
         let json_string = serde_json::to_string(self)?;
-        println!("{}", json_string);
         Ok(json_string)
     }
 
@@ -130,4 +134,24 @@ impl Leaderboard {
         let leaderboard = serde_json::from_str(&json_string)?;
         Ok(leaderboard)
     }
+
+    fn get_leaderboard_file_location(name: String) -> String {
+        let mut file_location = name;
+        file_location.push_str(".json");
+        file_location
+    }
+
+    pub fn save_leaderboard(&mut self) -> Result<String, Box<dyn Error>> {
+        let data = self.serialize_to_json()?;
+        let file_location = Leaderboard::get_leaderboard_file_location(self.name.clone());
+        storage::write_to_file(data, file_location)?;
+        Ok(format!("Successfully saved {}", self.name).to_owned())
+    }
+
+    pub fn open_leaderboard(name: String) -> Result<Leaderboard, Box<dyn Error>>  {
+        let file_location = Leaderboard::get_leaderboard_file_location(name);
+        let data = storage::read_from_file(file_location)?;
+        Ok(Leaderboard::intialize_from_json(data)?)
+    }
+
 }
