@@ -1,6 +1,10 @@
 mod model;
+mod storage;
 
+use bincode::de::read;
 use model::{Leaderboard};
+
+use crate::storage::read_from_file;
 
 fn main() {
     let mut leaderboard = Leaderboard::new();
@@ -15,9 +19,12 @@ fn main() {
     leaderboard.remove(5);
     leaderboard.new_entry("Ori and the will of the wisps".to_owned(), 45);
     leaderboard.change_rank(1, 4).unwrap();
-    // leaderboard.display();
+    
     let jstr = leaderboard.serialize_to_json().unwrap();
-    let mut newlb = Leaderboard::intialize_from_json(jstr).unwrap();
+    storage::write_to_file(&jstr).unwrap();
+
+    let read_string = read_from_file().unwrap();
+    let mut newlb = Leaderboard::intialize_from_json(read_string).unwrap();
 
     newlb.new_entry("Cyberpunk 2077".to_owned(), 10);
     newlb.display();
