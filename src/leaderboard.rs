@@ -2,11 +2,12 @@ use serde_json::Result as JSONResult;
 use std::error::Error;
 use serde::{Deserialize, Serialize};
 use std::ops::Drop;
+use std::fmt::Write;
 
 use crate::node::Node;
 use crate::storage;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Leaderboard {
     name: String,
     entries: Vec<Node>,     // Sorted by ID
@@ -93,6 +94,16 @@ impl Leaderboard {
             println!("{}: {}", entry.rank, entry.name);
         }
         println!("========================");
+    }
+
+    pub fn write_to_string(&self) -> String {
+        let mut s = String::new();
+        writeln!(&mut s, "========={}===========", self.name).unwrap();
+        for entry in &self.entries {
+            writeln!(&mut s, "{}: {}", entry.rank, entry.name).unwrap();
+        }
+        writeln!(&mut s, "========================").unwrap();
+        s
     }
 
     pub fn serialize_to_json(&self) -> JSONResult<String>{
