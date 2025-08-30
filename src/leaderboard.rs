@@ -2,7 +2,7 @@ use serde_json::Result as JSONResult;
 use std::error::Error;
 use serde::{Deserialize, Serialize};
 use std::ops::Drop;
-use std::fmt::Write;
+use std::io::Write;
 
 use crate::node::Node;
 use crate::storage;
@@ -44,9 +44,10 @@ impl Leaderboard {
         self.next_id += 1;
 
         match self.insert_node_at_rank(new_node, rank) {
-            Ok(r) => println!("{} successfully inserted at rank: {}", name, r),
+            Ok(r) => (), //println!("{} successfully inserted at rank: {}", name, r),
             Err(s) => println!("{}", s)
-        }
+        };
+        self.save_leaderboard().unwrap();
     }
 
     fn remove_node_by_rank(&mut self, rank: usize) -> Result<(String, usize), String> {
@@ -60,12 +61,13 @@ impl Leaderboard {
                 node.rank -= 1;
             }
         }
+        self.save_leaderboard().unwrap();
         Ok((removed_name, rank))
     }
 
     pub fn remove(&mut self, rank:usize) {
         match self.remove_node_by_rank(rank) {
-            Ok((n, _r)) => println!("{} removed from rank: {}", n, rank),
+            Ok((n, _r)) => (),//println!("{} removed from rank: {}", n, rank),
             Err(s) => println!("{}", s)
         }
     }
@@ -96,13 +98,11 @@ impl Leaderboard {
         println!("========================");
     }
 
-    pub fn write_to_string(&self) -> String {
-        let mut s = String::new();
-        writeln!(&mut s, "========={}===========", self.name).unwrap();
+    pub fn write_to_vector(&self) -> Vec<String> {
+        let mut s = Vec::new();
         for entry in &self.entries {
-            writeln!(&mut s, "{}: {}", entry.rank, entry.name).unwrap();
+            s.push(format!("{}: {}\n", entry.rank, entry.name));
         }
-        writeln!(&mut s, "========================").unwrap();
         s
     }
 
