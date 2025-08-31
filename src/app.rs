@@ -7,7 +7,7 @@ use ratatui::{
     DefaultTerminal, Frame,
     style::{Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, Paragraph, Tabs, List, Clear},
+    widgets::{Block, Paragraph, Tabs, List, ListItem},
     symbols::border,
     symbols,
     layout::Layout,
@@ -37,6 +37,8 @@ pub struct App <'a>{
     running: bool,
     current_leaderboard_index: usize,
     current_leaderboard: Leaderboard,
+    current_entry: usize,
+    yanked_entry: Option<usize>,
     state: AppState,
     entry_name_input: TextArea<'a>,
     entry_name: String,
@@ -64,6 +66,8 @@ impl <'a> App <'_> {
             running: true,
             current_leaderboard_index: 0,
             current_leaderboard: lb,
+            current_entry: 0,
+            yanked_entry: None,
             state: AppState::Show,
             entry_name_input: TextArea::default(),
             entry_rank_input: TextArea::default(),
@@ -157,6 +161,8 @@ impl <'a> App <'_> {
             "<Ctrl+l> ".blue().bold(),
             " Back".into(),
             "<b> ".blue().bold(),
+            " Delete".into(),
+            "<Ctrl+d> ".blue().bold(),
             " X".into(),
             "<Ctrl+C> ".blue().bold(),
         ]);
@@ -166,13 +172,24 @@ impl <'a> App <'_> {
 
         match self.state {
             AppState::Show => {
-                frame.render_widget(Clear, chunks[1]);
                 let ldb_entries = self.current_leaderboard.write_to_vector();
-                frame.render_widget(
-                    List::new(ldb_entries)
-                        .block(para_block),
-                    chunks[1]
-                );
+                let mut items = Vec::new();
+                for i in 0..self.current_leaderboard.len() {
+                    let mut item: ListItem = Line::raw(ldb_entries[i].clone()).into();
+                    if i == self.current_entry {
+                        item = Line::raw(ldb_entries[i].clone()).yellow().into();
+                    } 
+                    match self.yanked_entry {
+                        Some(e) =>
+                        if i == e {
+                            item = Line::raw(ldb_entries[i].clone()).red().into();
+                        },
+                        None => ()
+                    }
+                    items.push(item);
+                }
+                let list = List::default().items(items).block(para_block);//.block(para_block);
+                frame.render_widget(list,chunks[1]);
             },
             AppState::NewEntry => {
                 let entry_chunks = Layout::default()
@@ -230,6 +247,8 @@ impl <'a> App <'_> {
                                         }
                                         // Move focus to rank input
                                         self.focus = EntryFocus::Rank;
+                                        self.entry_name_input = TextArea::default();
+                                        self.entry_rank_input = TextArea::default();
                                     }
                                     EntryFocus::Rank => {
                                         if let Some(rank_line) = self.entry_rank_input.lines().get(0) {
@@ -239,11 +258,13 @@ impl <'a> App <'_> {
                                                 // Done editing, maybe go back to main state
                                                 self.current_leaderboard.new_entry(&self.entry_name, self.entry_rank);
                                                 self.state = AppState::Show;
-                                                self.focus = EntryFocus::Rank;
+                                                self.focus = EntryFocus::Name;
                                             } else {
                                                 println!("Rank must be a number!");
                                             }
                                         }
+                                        self.entry_name_input = TextArea::default();
+                                        self.entry_rank_input = TextArea::default();
                                     }
                                 }
                             }
@@ -255,35 +276,48 @@ impl <'a> App <'_> {
                     }
                     AppState::NewLDB => {
                         self.ldb_name_input.input(key);
+                        match key.code {
+                            KeyCode::Enter => {
+                                if let Some(name_line) = self.ldb_name_input.lines().get(0) {
+                                    self.ldb_name = name_line.clone();
+                                    self.new_leaderboard(&self.ldb_name.clone()).unwrap();
+                                    self.state = AppState::Show;
+                                    self.ldb_name_input = TextArea::default();
+                                }
+                            },
+                            _ => {} 
+                        }
                     }
                     _ => {}
                 }
 
                 // handle custom key logic
-                match key.code {
-                    KeyCode::Esc => {
-                        // exit or do something on ESC
-                    }
-                    KeyCode::Enter => {
-                        if self.state == AppState::NewEntry {
-                            if let Some(name_line) = self.entry_name_input.lines().get(0) {
-                                self.entry_name = name_line.clone();
-                            }
-                            if let Some(rank_line) = self.entry_rank_input.lines().get(0) {
-                                if let Ok(rank) = rank_line.parse::<usize>() {
-                                    self.entry_rank = rank;
-                                }
-                            }
-                        } else if self.state == AppState::NewLDB {
-                            if let Some(name_line) = self.ldb_name_input.lines().get(0) {
-                                let name_line = name_line.to_string();
-                                self.new_leaderboard(&name_line).unwrap();
-                                self.state = AppState::Show;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+                // match key.code {
+                //     KeyCode::Esc => {
+                //         // exit or do something on ESC
+                //     }
+                //     KeyCode::Enter => {
+                //         if self.state == AppState::NewEntry {
+                //             if let Some(name_line) = self.entry_name_input.lines().get(0) {
+                //                 self.entry_name = name_line.clone();
+                //                 self.focus = EntryFocus::Rank;
+                //             }
+                //             if let Some(rank_line) = self.entry_rank_input.lines().get(0) {
+                //                 if let Ok(rank) = rank_line.parse::<usize>() {
+                //                     self.entry_rank = rank;
+                //                     // self.focus = EntryFocus::Name;
+                //                 }
+                //             }
+                //         } else if self.state == AppState::NewLDB {
+                //             if let Some(name_line) = self.ldb_name_input.lines().get(0) {
+                //                 let name_line = name_line.to_string();
+                //                 self.new_leaderboard(&name_line).unwrap();
+                //                 self.state = AppState::Show;
+                //             }
+                //         }
+                //     }
+                //     _ => {}
+                // }
 
                 // if you also want your own handler:
                 self.on_key_event(key);
@@ -292,8 +326,8 @@ impl <'a> App <'_> {
             Event::Resize(_, _) => {}
             _ => {}
         }
-    }
-    Ok(())
+        }
+        Ok(())
     }
 
     /// Handles the key events and updates the state of [`App`].
@@ -306,14 +340,43 @@ impl <'a> App <'_> {
             // Add other key handlers here.
             (_, KeyCode::Left) => if self.state == AppState::Show { self.show_prev_leaderboard().unwrap() },
             (_, KeyCode::Right) => if self.state == AppState::Show { self.show_next_leaderboard().unwrap() },
-            (KeyModifiers::CONTROL, KeyCode::Char('n')) => self.state = AppState::NewEntry,
             (KeyModifiers::CONTROL, KeyCode::Char('l')) => self.state = AppState::NewLDB,
-            (_, KeyCode::Esc) => self.state = AppState::Show,
+            (KeyModifiers::CONTROL, KeyCode::Char('n')) => self.state = AppState::NewEntry,
+            (_, KeyCode::Char('h')) => if self.state == AppState::Show { self.show_prev_leaderboard().unwrap() },
+            (_, KeyCode::Char('l')) => if self.state == AppState::Show { self.show_next_leaderboard().unwrap() },
+            (_, KeyCode::Esc) => { self.state = AppState::Show; self.yanked_entry = None; },
+            (_, KeyCode::Up) => if self.state == AppState::Show { self.show_prev_entry().unwrap() },
+            (_, KeyCode::Down) => if self.state == AppState::Show { self.show_next_entry().unwrap() },
+            (_, KeyCode::Char('k')) => if self.state == AppState::Show { self.show_prev_entry().unwrap() },
+            (_, KeyCode::Char('j')) => if self.state == AppState::Show { self.show_next_entry().unwrap() },
+            (KeyModifiers::CONTROL, KeyCode::Char('d')) => if self.state == AppState::Show { 
+                self.current_leaderboard.remove(self.current_entry+1); 
+                self.current_entry = 0;
+            },
+            (KeyModifiers::CONTROL, KeyCode::Char('y')) => if self.state == AppState::Show { 
+                self.yanked_entry = Some(self.current_entry);
+            },
+            (_, KeyCode::Char('p')) => if self.state == AppState::Show { 
+                match self.yanked_entry {
+                    Some(e) => {
+                        if e == self.current_entry {
+                            ()
+                        }
+                        else {
+                            self.current_leaderboard.change_rank(e+1, self.current_entry+1);
+                            self.yanked_entry = None;
+                        }
+                    },
+                    None => ()
+                }
+                // change rank to current entry+1
 
+            },
             _ => {}
+
         }
     }
-
+    
     fn quit(&mut self) {
         self.running = false;
     }
@@ -323,6 +386,14 @@ impl <'a> App <'_> {
             self.current_leaderboard_index -= 1;
             self.current_leaderboard = Leaderboard::open_leaderboard(&self.leaderboard_names[self.current_leaderboard_index])?;
         }
+        self.current_entry = 0;
+        Ok(())
+    }
+
+    fn show_prev_entry(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.current_entry > 0 {
+            self.current_entry -= 1;
+        }
         Ok(())
     }
 
@@ -330,6 +401,14 @@ impl <'a> App <'_> {
         if self.current_leaderboard_index < self.leaderboard_names.len()-1 {
             self.current_leaderboard_index += 1;
             self.current_leaderboard = Leaderboard::open_leaderboard(&self.leaderboard_names[self.current_leaderboard_index])?;
+        }
+        self.current_entry = 0;
+        Ok(())
+    }
+    
+    fn show_next_entry(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.current_entry < self.current_leaderboard.len()-1 {
+            self.current_entry += 1;
         }
         Ok(())
     }

@@ -24,6 +24,10 @@ impl Leaderboard {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
     fn insert_node_at_rank(&mut self, node: Node, rank: usize) -> Result<usize, String>{
         if rank < 1 {
             return Err(format!("Rank must be higher than 0"));
