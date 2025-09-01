@@ -6,17 +6,17 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use ratatui::{
     DefaultTerminal, Frame,
     style::{Style, Stylize},
-    text::{Line, Text},
-    widgets::{Block, Paragraph, Tabs, List, ListItem},
-    symbols::border,
+    text::{Line},
+    widgets::{Block, Tabs, List, ListItem, ListState},
     symbols,
     layout::Layout,
-    prelude::{Direction, Constraint, Rect}
+    prelude::{Direction, Constraint}
 };
-use tui_textarea::{Input, Key, TextArea};
+use tui_textarea::{TextArea};
 
 use crate::leaderboard::Leaderboard;
 use crate::storage::{read_from_file, write_to_file};
+use crate::log::Log;
 
 #[derive(Debug, PartialEq, Eq)]
 enum AppState {
@@ -46,7 +46,9 @@ pub struct App <'a>{
     entry_rank: usize,
     ldb_name_input: TextArea<'a>,
     ldb_name: String,
-    focus: EntryFocus
+    focus: EntryFocus,
+    logger: Log,
+    list_state: ListState
 }
 
 impl <'a> App <'_> {
@@ -76,6 +78,8 @@ impl <'a> App <'_> {
             entry_rank: 100,
             focus: EntryFocus::Name,
             ldb_name: String::new(),
+            logger: Log::new("app.log").unwrap(),
+            list_state: ListState::default()
         })
     }
 
@@ -105,7 +109,19 @@ impl <'a> App <'_> {
         let mut file_name = "Leaderboards/".to_owned();
         file_name.push_str(name);
         file_name.push_str(".json");
-        std::fs::remove_file(file_name)?;
+        if !std::path::Path::new(&file_name).exists() {
+            self.logger.write("File does not exist!");
+        } else {
+            self.logger.write("File exists, attempting deletion");
+        }
+        match std::fs::remove_file(file_name) {
+            Ok(()) => self.logger.write(format!("REMOVE LDB file {}.json Succeeded!", &self.leaderboard_names[index])),
+            Err(e) => self.logger.write(format!("REMOVE LDB file {}.json Failed: {}", &self.leaderboard_names[index], e))
+        };
+        match self.open_leaderboard(0) {
+            Ok(ldb) => self.current_leaderboard = ldb,
+            Err(e) => self.logger.write(format!("OPEN LDB {} Failed: {}", &self.leaderboard_names[index], e))
+        }
         self.leaderboard_names.remove(index);
         Ok(())
     }
@@ -132,6 +148,7 @@ impl <'a> App <'_> {
         .constraints([
             Constraint::Length(3),     // for Tabs
             Constraint::Min(0),        // for leaderboard content
+            Constraint::Length(3),     // for Messages 
         ])
         .split(frame.area());
 
@@ -189,7 +206,7 @@ impl <'a> App <'_> {
                     items.push(item);
                 }
                 let list = List::default().items(items).block(para_block);//.block(para_block);
-                frame.render_widget(list,chunks[1]);
+                frame.render_stateful_widget(list,chunks[1],&mut self.list_state);
             },
             AppState::NewEntry => {
                 let entry_chunks = Layout::default()
@@ -291,34 +308,6 @@ impl <'a> App <'_> {
                     _ => {}
                 }
 
-                // handle custom key logic
-                // match key.code {
-                //     KeyCode::Esc => {
-                //         // exit or do something on ESC
-                //     }
-                //     KeyCode::Enter => {
-                //         if self.state == AppState::NewEntry {
-                //             if let Some(name_line) = self.entry_name_input.lines().get(0) {
-                //                 self.entry_name = name_line.clone();
-                //                 self.focus = EntryFocus::Rank;
-                //             }
-                //             if let Some(rank_line) = self.entry_rank_input.lines().get(0) {
-                //                 if let Ok(rank) = rank_line.parse::<usize>() {
-                //                     self.entry_rank = rank;
-                //                     // self.focus = EntryFocus::Name;
-                //                 }
-                //             }
-                //         } else if self.state == AppState::NewLDB {
-                //             if let Some(name_line) = self.ldb_name_input.lines().get(0) {
-                //                 let name_line = name_line.to_string();
-                //                 self.new_leaderboard(&name_line).unwrap();
-                //                 self.state = AppState::Show;
-                //             }
-                //         }
-                //     }
-                //     _ => {}
-                // }
-
                 // if you also want your own handler:
                 self.on_key_event(key);
             }
@@ -345,13 +334,22 @@ impl <'a> App <'_> {
             (_, KeyCode::Char('h')) => if self.state == AppState::Show { self.show_prev_leaderboard().unwrap() },
             (_, KeyCode::Char('l')) => if self.state == AppState::Show { self.show_next_leaderboard().unwrap() },
             (_, KeyCode::Esc) => { self.state = AppState::Show; self.yanked_entry = None; },
-            (_, KeyCode::Up) => if self.state == AppState::Show { self.show_prev_entry().unwrap() },
-            (_, KeyCode::Down) => if self.state == AppState::Show { self.show_next_entry().unwrap() },
+            (_, KeyCode::Up) => if self.state == AppState::Show { 
+                self.show_prev_entry().unwrap();
+                self.list_state.scroll_up_by(1);
+            },
+            (_, KeyCode::Down) => if self.state == AppState::Show { 
+                self.show_next_entry().unwrap();
+                self.list_state.scroll_down_by(1);
+            },
             (_, KeyCode::Char('k')) => if self.state == AppState::Show { self.show_prev_entry().unwrap() },
             (_, KeyCode::Char('j')) => if self.state == AppState::Show { self.show_next_entry().unwrap() },
             (KeyModifiers::CONTROL, KeyCode::Char('d')) => if self.state == AppState::Show { 
                 self.current_leaderboard.remove(self.current_entry+1); 
-                self.current_entry = 0;
+            },
+            (KeyModifiers::CONTROL, KeyCode::Char('x')) => if self.state == AppState::Show { 
+                self.remove_leaderboard(self.current_leaderboard_index).unwrap(); 
+                self.current_leaderboard_index = 0;
             },
             (KeyModifiers::CONTROL, KeyCode::Char('y')) => if self.state == AppState::Show { 
                 self.yanked_entry = Some(self.current_entry);
@@ -363,7 +361,7 @@ impl <'a> App <'_> {
                             ()
                         }
                         else {
-                            self.current_leaderboard.change_rank(e+1, self.current_entry+1);
+                            self.current_leaderboard.change_rank(e+1, self.current_entry+1).unwrap();
                             self.yanked_entry = None;
                         }
                     },

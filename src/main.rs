@@ -2,6 +2,7 @@ mod leaderboard;
 mod storage;
 mod node;
 mod app;
+mod log;
 
 use std::error::Error;
 
