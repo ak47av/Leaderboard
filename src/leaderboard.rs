@@ -2,7 +2,6 @@ use serde_json::Result as JSONResult;
 use std::error::Error;
 use serde::{Deserialize, Serialize};
 use std::ops::Drop;
-use std::io::Write;
 
 use crate::node::Node;
 use crate::storage;
@@ -11,7 +10,7 @@ use crate::storage;
 pub struct Leaderboard {
     name: String,
     entries: Vec<Node>,     // Sorted by ID
-    next_id: usize
+    next_id: usize,
 }
 
 impl Leaderboard {
@@ -28,6 +27,10 @@ impl Leaderboard {
         self.entries.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     fn insert_node_at_rank(&mut self, node: Node, rank: usize) -> Result<usize, String>{
         if rank < 1 {
             return Err(format!("Rank must be higher than 0"));
@@ -42,16 +45,20 @@ impl Leaderboard {
         Ok(rank)
     }
 
-    pub fn new_entry(&mut self, name: &str, rank: usize) {
+    pub fn new_entry(&mut self, name: &str, rank: usize) -> Result<(), String> {
         let rank = std::cmp::min(rank, self.entries.len()  + 1);
         let new_node = Node {name: name.to_owned(), rank: rank, id: self.next_id};
         self.next_id += 1;
 
         match self.insert_node_at_rank(new_node, rank) {
-            Ok(r) => (), //println!("{} successfully inserted at rank: {}", name, r),
-            Err(s) => println!("{}", s)
+            Ok(_r) => (), //println!("{} successfully inserted at rank: {}", name, r),
+            Err(e) => return Err(format!("Unable to insert node at rank {}: {}", rank, e)) 
         };
-        self.save_leaderboard().unwrap();
+        match self.save_leaderboard() {
+            Ok(()) => {},
+            Err(e) => return Err(format!("Unable to insert node at rank {}: {}", rank, e))
+        }
+        Ok(())
     }
 
     fn remove_node_by_rank(&mut self, rank: usize) -> Result<(String, usize), String> {
@@ -71,12 +78,12 @@ impl Leaderboard {
 
     pub fn remove(&mut self, rank:usize) {
         match self.remove_node_by_rank(rank) {
-            Ok((n, _r)) => (),//println!("{} removed from rank: {}", n, rank),
+            Ok((_n, _r)) => (),//println!("{} removed from rank: {}", n, rank),
             Err(s) => println!("{}", s)
         }
     }
 
-    pub fn change_rank(&mut self, rank:usize, to_rank: usize) -> Result<usize, String> {
+    pub fn change_rank(&mut self, rank:usize, to_rank: usize) -> Result<(), String> {
         let mut temp = self.entries[rank-1].clone();
         if let Err(err) = self.remove_node_by_rank(rank) {
             return Err(format!("Change failed: {}", err));
@@ -85,7 +92,7 @@ impl Leaderboard {
         if let Err(err) = self.insert_node_at_rank(temp, to_rank) {
             return Err(format!("Change failed: {}", err));
         }
-        Ok(to_rank)
+        Ok(())
     }
 
     pub fn debug_pretty(&self) {
@@ -127,11 +134,11 @@ impl Leaderboard {
         file_location
     }
 
-    pub fn save_leaderboard(&self) -> Result<String, Box<dyn Error>> {
+    pub fn save_leaderboard(&self) -> Result<(), Box<dyn Error>> {
         let data = self.serialize_to_json()?;
         let file_location = Leaderboard::get_leaderboard_file_location(&self.name);
         storage::write_to_file(&data, &file_location)?;
-        Ok(format!("Successfully saved {}", self.name).to_owned())
+        Ok(())
     }
 
     pub fn open_leaderboard(name: &str) -> Result<Leaderboard, Box<dyn Error>>  {

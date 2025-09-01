@@ -1,10 +1,10 @@
 use std::io::{Write};
 use std::fs::File;
 
-pub fn write_to_file(str: &str, file_location: &str) -> std::io::Result<String> {
+pub fn write_to_file(str: &str, file_location: &str) -> std::io::Result<()> {
     let mut file = File::create(file_location)?;
     file.write_all(str.as_bytes())?;
-    Ok("Successfully wrote to file".to_owned())
+    Ok(())
 }
 
 pub fn read_from_file(file_location: &str) -> std::io::Result<String> {

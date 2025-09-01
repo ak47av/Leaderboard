@@ -6,3 +6,33 @@
 [2025-08-31 15:51:55] REMOVE LDB file aandipoattui.json Succeeded!
 [2025-08-31 15:58:10] File exists, attempting deletion
 [2025-08-31 15:58:10] REMOVE LDB file Streets never forget.json Succeeded!
+[2025-09-01 18:21:37] Leaderboards directory exists
+[2025-09-01 18:30:13] Leaderboards directory exists
+[2025-09-01 18:30:21] File exists, attempting deletion
+[2025-09-01 18:30:21] REMOVE LDB file First_Leaderboard.json Succeeded!
+[2025-09-01 18:30:21] OPEN LDB First_Leaderboard Failed: The system cannot find the file specified. (os error 2)
+[2025-09-01 18:31:24] Leaderboards directory exists
+[2025-09-01 18:31:31] File exists, attempting deletion
+[2025-09-01 18:31:31] REMOVE LDB file First_Leaderboard.json Succeeded!
+[2025-09-01 18:31:31] OPEN LDB First_Leaderboard Failed: The system cannot find the file specified. (os error 2)
+[2025-09-01 20:21:46] File exists, attempting deletion
+[2025-09-01 20:21:46] REMOVE LDB file asdasda.json Succeeded!
+[2025-09-01 20:21:46] OPEN LDB asdasda Failed: The system cannot find the file specified. (os error 2)
+[2025-09-01 22:16:55] Created new leaderboard: Why duznit work
+[2025-09-01 22:17:10] Created new leaderboard: bunda
+[2025-09-01 22:17:22] File exists, attempting deletion
+[2025-09-01 22:17:22] REMOVE LDB file bunda.json Succeeded!
+[2025-09-01 22:17:22] File exists, attempting deletion
+[2025-09-01 22:17:22] REMOVE LDB file Why duznit work.json Succeeded!
+[2025-09-01 22:17:22] OPEN LDB Why duznit work Failed: The system cannot find the file specified. (os error 2)
+[2025-09-01 22:17:25] Created new leaderboard: bunda
+[2025-09-01 22:20:06] File exists, attempting deletion
+[2025-09-01 22:20:06] REMOVE LDB file bunda.json Succeeded!
+[2025-09-01 22:20:06] OPEN LDB bunda Failed: The system cannot find the file specified. (os error 2)
+[2025-09-01 22:20:09] Created new leaderboard: otha
+[2025-09-01 22:20:45] Created new leaderboard: bunda
+[2025-09-01 22:24:45] File exists, attempting deletion
+[2025-09-01 22:24:45] REMOVE LDB file bunda.json Succeeded!
+[2025-09-01 22:24:45] File exists, attempting deletion
+[2025-09-01 22:24:45] REMOVE LDB file otha.json Succeeded!
+[2025-09-01 22:24:45] OPEN LDB otha Failed: The system cannot find the file specified. (os error 2)

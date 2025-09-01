@@ -1,18 +1,14 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 use std::error::Error;
 use std::ops::Drop;
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use ratatui::widgets::Clear;
 use ratatui::{
-    DefaultTerminal, Frame,
-    style::{Style, Stylize},
-    text::{Line},
-    widgets::{Block, Tabs, List, ListItem, ListState},
-    symbols,
-    layout::Layout,
-    prelude::{Direction, Constraint}
+    layout::Layout, prelude::{Constraint, Direction}, style::{Style, Stylize}, symbols, text::Line, widgets::{Block, List, ListItem, ListState, Paragraph, Tabs}, DefaultTerminal, Frame
 };
 use tui_textarea::{TextArea};
+use std::path::Path;
 
 use crate::leaderboard::Leaderboard;
 use crate::storage::{read_from_file, write_to_file};
@@ -36,7 +32,7 @@ pub struct App <'a>{
     leaderboard_names: Vec<String>,
     running: bool,
     current_leaderboard_index: usize,
-    current_leaderboard: Leaderboard,
+    current_leaderboard: Option<Leaderboard>,
     current_entry: usize,
     yanked_entry: Option<usize>,
     state: AppState,
@@ -52,8 +48,19 @@ pub struct App <'a>{
 }
 
 impl <'a> App <'_> {
+
+    fn create_folder_and_main_json() -> Result<(), Box<dyn Error>> {
+        std::fs::create_dir("Leaderboards")?;
+        write_to_file("{\"leaderboards\":[]}", "Leaderboards/Leaderboards.json")?;
+        //write_to_file("{\"name\":\"Games\",\"entries\":[],\"next_id\":33}", "Leaderboards/First_Leaderboard.json")?;
+        Ok(())
+    }
     
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    pub fn new(mut log: Log) -> Result<Self, Box<dyn Error>> {
+        if !Path::new("Leaderboards").exists(){
+            log.write("Leaderboards directory exists");
+            App::create_folder_and_main_json()?;
+        }
         let json_str = read_from_file("Leaderboards/Leaderboards.json")?;
         let hmap: HashMap<String, Vec<String>> = serde_json::from_str(&json_str)?;
         let mut ldb_vec: Vec<String> = Vec::new();
@@ -62,7 +69,12 @@ impl <'a> App <'_> {
                 ldb_vec.push(ldb.to_string());
             }
         }
-        let lb = Leaderboard::open_leaderboard(&ldb_vec[0])?;
+        let lb: Option<Leaderboard>;
+        if ldb_vec.is_empty() {
+            lb = None;
+        } else {
+            lb = Some(Leaderboard::open_leaderboard(&ldb_vec[0])?);
+        }
         Ok(App {
             leaderboard_names: ldb_vec,
             running: true,
@@ -78,7 +90,7 @@ impl <'a> App <'_> {
             entry_rank: 100,
             focus: EntryFocus::Name,
             ldb_name: String::new(),
-            logger: Log::new("app.log").unwrap(),
+            logger: log,
             list_state: ListState::default()
         })
     }
@@ -119,8 +131,11 @@ impl <'a> App <'_> {
             Err(e) => self.logger.write(format!("REMOVE LDB file {}.json Failed: {}", &self.leaderboard_names[index], e))
         };
         match self.open_leaderboard(0) {
-            Ok(ldb) => self.current_leaderboard = ldb,
-            Err(e) => self.logger.write(format!("OPEN LDB {} Failed: {}", &self.leaderboard_names[index], e))
+            Ok(ldb) => self.current_leaderboard = Some(ldb),
+            Err(e) => {
+                self.current_leaderboard = None;
+                self.logger.write(format!("OPEN LDB {} Failed: {}", &self.leaderboard_names[index], e))
+            }
         }
         self.leaderboard_names.remove(index);
         Ok(())
@@ -165,7 +180,11 @@ impl <'a> App <'_> {
             chunks[0]
         );
 
-        let title_txt = &self.leaderboard_names[self.current_leaderboard_index];
+        let title_txt: String;
+        match &self.leaderboard_names.get(self.current_leaderboard_index) {
+            Some(s) => title_txt = s.to_string(),
+            None => title_txt = "Add a new Leaderboard".to_string()
+        }
         let title = Line::from(title_txt.clone().bold());
         let instructions = Line::from(vec![
             " <-".into(),
@@ -189,24 +208,34 @@ impl <'a> App <'_> {
 
         match self.state {
             AppState::Show => {
-                let ldb_entries = self.current_leaderboard.write_to_vector();
-                let mut items = Vec::new();
-                for i in 0..self.current_leaderboard.len() {
-                    let mut item: ListItem = Line::raw(ldb_entries[i].clone()).into();
-                    if i == self.current_entry {
-                        item = Line::raw(ldb_entries[i].clone()).yellow().into();
-                    } 
-                    match self.yanked_entry {
-                        Some(e) =>
-                        if i == e {
-                            item = Line::raw(ldb_entries[i].clone()).red().into();
-                        },
-                        None => ()
+                match &self.current_leaderboard {
+                    Some(ldb) => {
+                        let ldb_entries = ldb.write_to_vector();
+                        let mut items = Vec::new();
+                        for i in 0..ldb.len() {
+                            let mut item: ListItem = Line::raw(ldb_entries[i].clone()).into();
+                            if i == self.current_entry {
+                                item = Line::raw(ldb_entries[i].clone()).yellow().into();
+                            } 
+                            match self.yanked_entry {
+                                Some(e) =>
+                                if i == e {
+                                    item = Line::raw(ldb_entries[i].clone()).red().into();
+                                },
+                                None => ()
+                            }
+                            items.push(item);
+                        }
+                        let list = List::default().items(items).block(para_block);//.block(para_block);
+                        frame.render_widget(Clear, chunks[1]);
+                        frame.render_stateful_widget(list,chunks[1],&mut self.list_state);
+                    },
+                    None => {
+                        let line = Line::from("Add a new leaderboard using Ctrl + l");
+                        let para = Paragraph::new(line).block(para_block);
+                        frame.render_widget(para, chunks[1]);
                     }
-                    items.push(item);
                 }
-                let list = List::default().items(items).block(para_block);//.block(para_block);
-                frame.render_stateful_widget(list,chunks[1],&mut self.list_state);
             },
             AppState::NewEntry => {
                 let entry_chunks = Layout::default()
@@ -273,7 +302,13 @@ impl <'a> App <'_> {
                                                 self.entry_rank = rank;
                                                 //println!("Submitted name: {}, rank: {}", self.entry_name, self.entry_rank);
                                                 // Done editing, maybe go back to main state
-                                                self.current_leaderboard.new_entry(&self.entry_name, self.entry_rank);
+                                                match &mut self.current_leaderboard{
+                                                    Some(ldb) => ldb.new_entry(&self.entry_name, self.entry_rank)
+                                                        .unwrap_or_else(|e| self.logger.write(
+                                                            format!("Unable to create new entry: {}", e)
+                                                        )),
+                                                    None => {}
+                                                }
                                                 self.state = AppState::Show;
                                                 self.focus = EntryFocus::Name;
                                             } else {
@@ -297,7 +332,13 @@ impl <'a> App <'_> {
                             KeyCode::Enter => {
                                 if let Some(name_line) = self.ldb_name_input.lines().get(0) {
                                     self.ldb_name = name_line.clone();
-                                    self.new_leaderboard(&self.ldb_name.clone()).unwrap();
+                                    match self.new_leaderboard(&self.ldb_name.clone()) {
+                                        Ok(new_ldb) => {
+                                            self.current_leaderboard = Some(new_ldb);
+                                            self.logger.write(format!("Created new leaderboard: {}", self.ldb_name));
+                                        },
+                                        Err(err) => self.logger.write(format!("Error creating new leaderboard: {}", err)),
+                                    }
                                     self.state = AppState::Show;
                                     self.ldb_name_input = TextArea::default();
                                 }
@@ -330,7 +371,12 @@ impl <'a> App <'_> {
             (_, KeyCode::Left) => if self.state == AppState::Show { self.show_prev_leaderboard().unwrap() },
             (_, KeyCode::Right) => if self.state == AppState::Show { self.show_next_leaderboard().unwrap() },
             (KeyModifiers::CONTROL, KeyCode::Char('l')) => self.state = AppState::NewLDB,
-            (KeyModifiers::CONTROL, KeyCode::Char('n')) => self.state = AppState::NewEntry,
+            (KeyModifiers::CONTROL, KeyCode::Char('n')) => {
+                match &self.current_leaderboard {
+                    Some(_) => self.state = AppState::NewEntry,
+                    None => {}
+                }
+            },
             (_, KeyCode::Char('h')) => if self.state == AppState::Show { self.show_prev_leaderboard().unwrap() },
             (_, KeyCode::Char('l')) => if self.state == AppState::Show { self.show_next_leaderboard().unwrap() },
             (_, KeyCode::Esc) => { self.state = AppState::Show; self.yanked_entry = None; },
@@ -345,10 +391,17 @@ impl <'a> App <'_> {
             (_, KeyCode::Char('k')) => if self.state == AppState::Show { self.show_prev_entry().unwrap() },
             (_, KeyCode::Char('j')) => if self.state == AppState::Show { self.show_next_entry().unwrap() },
             (KeyModifiers::CONTROL, KeyCode::Char('d')) => if self.state == AppState::Show { 
-                self.current_leaderboard.remove(self.current_entry+1); 
+                match &mut self.current_leaderboard{
+                    Some(ldb) => ldb.remove(self.current_entry+1),
+                    None => {}
+                }
             },
             (KeyModifiers::CONTROL, KeyCode::Char('x')) => if self.state == AppState::Show { 
-                self.remove_leaderboard(self.current_leaderboard_index).unwrap(); 
+                match &mut self.current_leaderboard{
+                    Some(_ldb) => self.remove_leaderboard(self.current_leaderboard_index)
+                            .unwrap_or_else(|e| self.logger.write(format!("Unable to remove leaderboard: {}", e))), 
+                    None => {}
+                }
                 self.current_leaderboard_index = 0;
             },
             (KeyModifiers::CONTROL, KeyCode::Char('y')) => if self.state == AppState::Show { 
@@ -361,14 +414,16 @@ impl <'a> App <'_> {
                             ()
                         }
                         else {
-                            self.current_leaderboard.change_rank(e+1, self.current_entry+1).unwrap();
+                            match &mut self.current_leaderboard{
+                                Some(ldb) => ldb.change_rank(e+1, self.current_entry+1)
+                                .unwrap_or_else(|e| self.logger.write(format!("Unable to change rank of entry: {}", e))), 
+                                None => {}
+                            }
                             self.yanked_entry = None;
                         }
                     },
                     None => ()
                 }
-                // change rank to current entry+1
-
             },
             _ => {}
 
@@ -379,35 +434,59 @@ impl <'a> App <'_> {
         self.running = false;
     }
 
-    fn show_prev_leaderboard(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.current_leaderboard_index > 0 {
-            self.current_leaderboard_index -= 1;
-            self.current_leaderboard = Leaderboard::open_leaderboard(&self.leaderboard_names[self.current_leaderboard_index])?;
-        }
-        self.current_entry = 0;
-        Ok(())
-    }
-
-    fn show_prev_entry(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.current_entry > 0 {
-            self.current_entry -= 1;
+    fn show_prev_leaderboard(&mut self) -> Result<(), Box<dyn Error>> {
+        if !self.leaderboard_names.is_empty() {
+            if self.current_leaderboard_index > 0 {
+                self.current_leaderboard_index -= 1;
+                match Leaderboard::open_leaderboard(&self.leaderboard_names[self.current_leaderboard_index]) {
+                    Ok(ldb) => self.current_leaderboard = Some(ldb),
+                    Err(err) => self.logger.write(format!("Unable to open previous leeaderboard: {}", err)),
+                }
+            }
+            self.current_entry = 0;
         }
         Ok(())
     }
 
-    fn show_next_leaderboard(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.current_leaderboard_index < self.leaderboard_names.len()-1 {
-            self.current_leaderboard_index += 1;
-            self.current_leaderboard = Leaderboard::open_leaderboard(&self.leaderboard_names[self.current_leaderboard_index])?;
+    fn show_prev_entry(&mut self) -> Result<(), Box<dyn Error>> {
+        match &self.current_leaderboard {
+            Some(ldb) => {
+                if !ldb.is_empty() {
+                    if self.current_entry > 0 {
+                        self.current_entry -= 1;
+                    }
+                }
+            },
+            None => {}
         }
-        self.current_entry = 0;
+        Ok(())
+    }
+
+    fn show_next_leaderboard(&mut self) -> Result<(), Box<dyn Error>> {
+        if !self.leaderboard_names.is_empty() {
+            if self.current_leaderboard_index < self.leaderboard_names.len()-1 {
+                self.current_leaderboard_index += 1;
+                match Leaderboard::open_leaderboard(&self.leaderboard_names[self.current_leaderboard_index]) {
+                    Ok(ldb) => self.current_leaderboard = Some(ldb),
+                    Err(err) => self.logger.write(format!("Unable to open next leeaderboard: {}", err)),
+                }
+            }
+            self.current_entry = 0;
+        }
         Ok(())
     }
     
-    fn show_next_entry(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.current_entry < self.current_leaderboard.len()-1 {
-            self.current_entry += 1;
-        }
+    fn show_next_entry(&mut self) -> Result<(), Box<dyn Error>> {
+        match &self.current_leaderboard {
+            Some(ldb) => {
+                if !ldb.is_empty() {
+                    if self.current_entry < ldb.len()-1 {
+                        self.current_entry += 1;
+                    }
+                }
+            },
+            None => {}
+        };
         Ok(())
     }
 
@@ -419,7 +498,12 @@ impl Drop for App <'_> {
         let ldb_names: Vec<String> = v.into_iter().cloned().collect();
         let mut hmap: HashMap<String, Vec<String>> = HashMap::new();
         hmap.insert("leaderboards".to_owned(), ldb_names);
-        let json_str = serde_json::to_string(&hmap).unwrap();
-        write_to_file(&json_str, "Leaderboards/Leaderboards.json").unwrap();
+        match serde_json::to_string(&hmap) {
+            Ok(s) => write_to_file(&s, "Leaderboards/Leaderboards.json")
+                            .unwrap_or_else(|e|
+                                self.logger.write(format!("Unable to write Leaderboard to file: {}", e)),
+                            ),
+            Err(err) => self.logger.write(format!("Unable to encode Leaderboard: {}", err)),
+        }
     }
 }

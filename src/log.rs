@@ -7,7 +7,7 @@ use chrono::Local;
 #[derive(Debug)]
 pub struct Log {
     file: std::fs::File,
-    buffer: Vec<String>,
+    //buffer: Vec<String>,
 }
 
 impl Log {
@@ -19,7 +19,7 @@ impl Log {
             .open(path.into())?;
         Ok(Self {
             file,
-            buffer: Vec::new(),
+            //buffer: Vec::new(),
         })
     }
 
@@ -39,11 +39,7 @@ impl Log {
         self.file.flush().unwrap();
 
         // Keep in memory for later (e.g. UI display)
-        self.buffer.push(msg);
+        //self.buffer.push(msg);
     }
 
-    /// Get all in-memory logs (for displaying in ratatui)
-    pub fn entries(&self) -> &[String] {
-        &self.buffer
-    }
 }

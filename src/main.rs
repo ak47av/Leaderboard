@@ -4,15 +4,16 @@ mod node;
 mod app;
 mod log;
 
-use std::error::Error;
-
+use std::{error::Error};
 use app::App;
+use log::Log;
 
 fn main() -> color_eyre::Result<(), Box<dyn Error>> {
 
     color_eyre::install()?;
+    let log = Log::new("app.log").unwrap();
+    let mut app = App::new(log)?;
     let terminal = ratatui::init();
-    let mut app = App::new().unwrap();
     let result = app.run(terminal)?;
     ratatui::restore();
 
